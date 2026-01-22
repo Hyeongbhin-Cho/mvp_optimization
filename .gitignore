@@ -1,0 +1,23 @@
+# 데이터셋 폴더 제외 
+**/data/
+**/datasets/
+dl3dv_undistort_hr_test/
+dl3dv_subset/
+*.tar
+*.zip
+
+# 모델 체크포인트 및 결과물
+**/output/
+**/checkpoints/
+**/experiments/
+**/wandb/
+*.pt
+*.ckpt
+*.pth
+*.mat
+
+# 파이썬 캐시 및 환경
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
