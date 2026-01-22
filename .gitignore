@@ -21,3 +21,8 @@ __pycache__/
 *.pyc
 .venv/
 .ipynb_checkpoints/
+
+# 부가 데이터
+gsplat/docs/source/assets/*.gif
+gsplat/docs/source/assets/*.mp4
+gsplat/assets/*.npz
