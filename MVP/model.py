@@ -30,20 +30,26 @@ def _init_weights(module):
 
 
 class GaussianRenderer(torch.autograd.Function):
+    CHUNK_SIZE = 4
+    
     @staticmethod
     def render(xyz, feature, scale, rotation, opacity, test_c2w, test_intr, 
                W, H, sh_degree, near_plane, far_plane, sh_degree_opacity):
         # opacity = opacity.sigmoid().squeeze(-1) # [2026-01-19 / Hyeongbhin] 
         scale = scale.exp()
         # rotation = F.normalize(rotation, p=2, dim=-1)
-        test_w2c = test_c2w.float().inverse().unsqueeze(0) # (1, 4, 4)
-        test_intr_i = torch.zeros(3, 3).to(test_intr.device)
-        test_intr_i[0, 0] = test_intr[0]
-        test_intr_i[1, 1] = test_intr[1]
-        test_intr_i[0, 2] = test_intr[2]
-        test_intr_i[1, 2] = test_intr[3]
-        test_intr_i[2, 2] = 1
-        test_intr_i = test_intr_i.unsqueeze(0) # (1, 3, 3)
+        test_w2c = test_c2w.float().inverse() #.unsqueeze(0) # (V, 4, 4)
+        C = test_w2c.shape[0]
+        test_intr_i = torch.zeros((C, 3, 3), device=test_w2c.device, dtype=test_w2c.dtype)
+        test_intr_i[:, 0, 0] = test_w2c[:, 0]
+        test_intr_i[:, 1, 1] = test_w2c[:, 1]
+        test_intr_i[:, 0, 2] = test_w2c[:, 2]
+        test_intr_i[:, 1, 2] = test_w2c[:, 3]
+        test_intr_i[:, 2, 2] = 1.0 # (V, 3, 3)
+        #t est_intr_i = test_intr_i.unsqueeze(0) # (1, 3, 3)
+        
+        bg_color = torch.ones((C, 3), device=test_intr.device, dtype=test_intr.dtype)
+        
         rendering, _, _ = rasterization(xyz, rotation, scale, opacity, feature,
                                         test_w2c, test_intr_i, W, H, sh_degree=sh_degree, 
                                         sh_degree_opacity=sh_degree_opacity, # [2026-01-19 / Hyeongbhin] 
@@ -52,7 +58,7 @@ class GaussianRenderer(torch.autograd.Function):
                                         absgrad=False,
                                         sparse_grad=False,                                        
                                         render_mode="RGB",
-                                        backgrounds=torch.ones(1, 3).to(test_intr.device),
+                                        backgrounds=bg_color,
                                         rasterize_mode='classic') # (1, H, W, 3) 
         return rendering # (1, H, W, 3)
 
@@ -66,15 +72,19 @@ class GaussianRenderer(torch.autograd.Function):
         ctx.near_plane = near_plane
         ctx.far_plane = far_plane
         ctx.sh_degree_opacity = sh_degree_opacity # [2026-01-19 / Hyeongbhin] 
+        
+        chunk_size = GaussianRenderer.CHUNK_SIZE
+        
         with torch.no_grad():
             B, V, _ = test_intr.shape
             renderings = torch.zeros(B, V, H, W, 3).to(xyz.device)
             for ib in range(B):
-                for iv in range(V):
-                    renderings[ib, iv:iv+1] = GaussianRenderer.render(xyz[ib], feature[ib], scale[ib], rotation[ib],
-                                                                      opacity[ib] if opacity.dim() > 3 else opacity[ib, iv],  # [2026-01-19 / Hyeongbhin] 
-                                                                      test_c2ws[ib,iv], test_intr[ib,iv], W, H, sh_degree, near_plane, far_plane,
-                                                                      sh_degree_opacity) # [2026-01-19 / Hyeongbhin] 
+                for iv in range(0, V, chunk_size):
+                    iv_end = iv+chunk_size if iv+chunk_size < V else V
+                    renderings[ib] = GaussianRenderer.render(xyz[ib], feature[ib], scale[ib], rotation[ib],
+                                                             opacity[ib],  # [2026-01-19 / Hyeongbhin] 
+                                                             test_c2ws[ib, iv:iv_end], test_intr[ib, iv:iv_end], W, H, sh_degree, near_plane, far_plane,
+                                                             sh_degree_opacity) # [2026-01-19 / Hyeongbhin] 
         renderings = renderings.requires_grad_()
         return renderings
 
@@ -92,15 +102,19 @@ class GaussianRenderer(torch.autograd.Function):
         near_plane = ctx.near_plane
         far_plane = ctx.far_plane
         sh_degree_opacity = ctx.sh_degree_opacity # [2026-01-19 / Hyeongbhin] 
+        
+        chunk_size = GaussianRenderer.CHUNK_SIZE
+        
         with torch.enable_grad():
             B, V, _ = test_intr.shape
             for ib in range(B):
                 for iv in range(V):
-                    rendering = GaussianRenderer.render(xyz[ib], feature[ib], scale[ib], rotation[ib], 
-                                                        opacity[ib] if opacity.dim() > 3 else opacity[ib, iv],  # [2026-01-19 / Hyeongbhin] 
-                                                        test_c2ws[ib,iv], test_intr[ib,iv], W, H, sh_degree, near_plane, far_plane, 
+                    iv_end = iv+chunk_size if iv+chunk_size < V else V
+                    renderings = GaussianRenderer.render(xyz[ib], feature[ib], scale[ib], rotation[ib], 
+                                                        opacity[ib],  # [2026-01-19 / Hyeongbhin] 
+                                                        test_c2ws[ib, iv:iv_end], test_intr[ib, iv:iv_end], W, H, sh_degree, near_plane, far_plane, 
                                                         sh_degree_opacity) # [2026-01-19 / Hyeongbhin] 
-                    rendering.backward(grad_output[ib, iv:iv+1])
+                    renderings.backward(grad_output[ib, iv:iv_end])
 
         return xyz.grad, feature.grad, scale.grad, rotation.grad, opacity.grad, None, None, None, None, None, None, None, None # [2026-01-19 / Hyeongbhin]
 
