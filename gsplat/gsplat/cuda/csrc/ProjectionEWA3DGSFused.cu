@@ -452,9 +452,11 @@ __global__ void projection_ewa_3dgs_fused_bwd_kernel(
                                             opacity,                  // fwd outputs
                                             v_opacity,                // grad outputs
                                             v_sh_coeffs, &v_dir);   // grad inputs
+
+            vec3 v_d = v_dir - glm::dot(v_dir, dir) * dir;
+            v_mean_c += v_d * inorm;
         }
     }
-    v_mean_c += v_dir * inorm;
 
     switch (camera_model) {
     case CameraModelType::PINHOLE: // perspective projection

@@ -168,7 +168,7 @@ projection_ewa_3dgs_fused_fwd(
         TORCH_CHECK(opacities_in.has_value(), "opacities_in must be provided to calculate opacities_out");
         at::DimVector opacities_out_shape(batch_dims);
         opacities_out_shape.append({C, N});
-        opacities_out = at::empty(opacities_out_shape, opt);
+        opacities_out = at::zeros(opacities_out_shape, opt);
     }
 
     launch_projection_ewa_3dgs_fused_fwd_kernel(

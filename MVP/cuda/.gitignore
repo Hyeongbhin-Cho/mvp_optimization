@@ -1,0 +1,13 @@
+# 컴파일된 바이너리 (Linux/Mac/Windows)
+*.so
+*.dylib
+*.pyd
+*.dll
+
+# 빌드 중간 부산물
+build/
+
+# 패키지 메타 데이터
+*.egg-info/
+dist/
+__pycache__/

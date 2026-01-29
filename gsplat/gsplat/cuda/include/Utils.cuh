@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Common.h"
+#include <ATen/cuda/Atomic.cuh>
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
@@ -897,13 +898,9 @@ inline __device__ void spherical_harmonics_opacity_vjp(
 
     if (degree < 2) {
         if (v_dir != nullptr) {
-            vec3 dir_n = vec3(x, y, z);
-            vec3 v_dir_n = vec3(v_x, v_y, v_z);
-            vec3 v_d = (v_dir_n - glm::dot(v_dir_n, dir_n) * dir_n);
-
-            v_dir->x = v_d.x;
-            v_dir->y = v_d.y;
-            v_dir->z = v_d.z;
+            v_dir->x = v_x;
+            v_dir->y = v_y;
+            v_dir->z = v_z;
         }
         return;
     }
@@ -954,13 +951,9 @@ inline __device__ void spherical_harmonics_opacity_vjp(
 
     if (degree < 3) {
         if (v_dir != nullptr) {
-            vec3 dir_n = vec3(x, y, z);
-            vec3 v_dir_n = vec3(v_x, v_y, v_z);
-            vec3 v_d = (v_dir_n - glm::dot(v_dir_n, dir_n) * dir_n);
-
-            v_dir->x = v_d.x;
-            v_dir->y = v_d.y;
-            v_dir->z = v_d.z;
+            v_dir->x = v_x;
+            v_dir->y = v_y;
+            v_dir->z = v_z;
         }
         return;
     }
@@ -1029,13 +1022,9 @@ inline __device__ void spherical_harmonics_opacity_vjp(
 
     if (degree < 4) {
         if (v_dir != nullptr) {
-            vec3 dir_n = vec3(x, y, z);
-            vec3 v_dir_n = vec3(v_x, v_y, v_z);
-            vec3 v_d = (v_dir_n - glm::dot(v_dir_n, dir_n) * dir_n);
-
-            v_dir->x = v_d.x;
-            v_dir->y = v_d.y;
-            v_dir->z = v_d.z;
+            v_dir->x = v_x;
+            v_dir->y = v_y;
+            v_dir->z = v_z;
         }
         return;
     }
@@ -1115,13 +1104,11 @@ inline __device__ void spherical_harmonics_opacity_vjp(
                 pSH18_z * coeffs[18] + pSH23_z * coeffs[23] +
                 pSH17_z * coeffs[17]);
 
-        vec3 dir_n = vec3(x, y, z);
-        vec3 v_dir_n = vec3(v_x, v_y, v_z);
-        vec3 v_d = (v_dir_n - glm::dot(v_dir_n, dir_n) * dir_n);
-
-        v_dir->x = v_d.x;
-        v_dir->y = v_d.y;
-        v_dir->z = v_d.z;
+        if (v_dir != nullptr) {
+            v_dir->x = v_x;
+            v_dir->y = v_y;
+            v_dir->z = v_z;
+        }
     }
 }
 

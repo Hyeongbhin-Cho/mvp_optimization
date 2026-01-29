@@ -16,6 +16,7 @@ import numpy as np
 from dpt_head import DPTHead
 from torch_impl import _spherical_harmonics
 from prope_custom import PropeDotProductAttention
+from mvp_cuda import spherical_harmonics_opacity
 
 def _init_weights(module):
     if isinstance(module, nn.Linear):
@@ -386,25 +387,13 @@ class MVPModel(nn.Module):
             dist = xyz.mean(dim=-1, keepdim=True).sigmoid() * self.config.model.gaussians.max_dist # (B, V*H*W, 1)
             xyz = dist * rayd_gs + rayo_gs
 
-            # precompute opacity to give regularization
-            if not self.inference_mode:
-                # [2026-01-19 / Hyeongbhin]
-                # dirs = xyz[:, None, :, :] - t_c2w[..., :3, 3][..., None, :] # (B, T, V*H*W, 3)
-                opacity_broad = torch.broadcast_to(
-                    opacity[..., None, :, :, :], (b, t, opacity.shape[1], -1, 1)
-                )
-                # [2026-01-19 / Hyeongbhin]
-                # opacity_precompute = _spherical_harmonics(  
-                #    self.config.model.gaussians.opacity_degree,
-                #    dirs, opacity_broad)
-
         if not self.inference_mode:
             gaussians = {
                 "xyz": xyz,
                 "feature": feature,
                 "scale": scale,
                 "rotation": rotation,
-                "opacity": opacity_broad, # opacity_precompute [2026-01-19 / Hyeongbhin]
+                "opacity": opacity, # [2026-01-19 / Hyeongbhin]
             }
 
             with torch.autocast(device_type="cuda", enabled=False):
@@ -443,15 +432,16 @@ class MVPModel(nn.Module):
 
             with torch.autocast(device_type="cuda", enabled=False):
                 ## opacity regularization
-                # [Gemini]
-                # 해당 코드는 규제항을 위해 넣은 코드인데 여기에서 _spherical_harmonics()가 pytorch로 짜여져 있네.
-                # _spherical_harmonics()를 cuda 코드로 변경해보고자 해.      
+                # [2026-01-29 / Hyeongbhin] 
                 rand_dirs = torch.randn_like(xyz)
-                rand_dirs = F.normalize(rand_dirs, p=2, dim=-1) # make it a unit vector
-                opacity_random = _spherical_harmonics(
-                    self.config.model.gaussians.opacity_degree,
-                    rand_dirs, opacity)
-                opacity_random = opacity_random.sigmoid().mean()
+                # rand_dirs = F.normalize(rand_dirs, p=2, dim=-1) # make it a unit vector
+                # opacity_random = _spherical_harmonics(
+                #     self.config.model.gaussians.opacity_degree,
+                #     rand_dirs, opacity)
+                # opacity_random = opacity_random.sigmoid().mean()
+                opacity_random = spherical_harmonics_opacity(self.config.model.gaussians.opacity_degree,
+                                                             rand_dirs,
+                                                             opacity).mean()
 
             loss_metrics["opacity_loss"] = opacity_random * 0.001
             loss_metrics["loss"] = loss_metrics["loss"] + loss_metrics["opacity_loss"]
