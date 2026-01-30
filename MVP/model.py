@@ -449,7 +449,7 @@ class MVPModel(nn.Module):
             with torch.autocast(device_type="cuda", enabled=False):
                 ## opacity regularization
                 # [2026-01-29 / Hyeongbhin] 
-                rand_dirs = torch.randn_like(xyz)
+                rand_dirs = torch.randn_like(xyz, requires_grad=False)
                 # rand_dirs = F.normalize(rand_dirs, p=2, dim=-1) # make it a unit vector
                 # opacity_random = _spherical_harmonics(
                 #     self.config.model.gaussians.opacity_degree,
