@@ -38,14 +38,14 @@ class GaussianRenderer(torch.autograd.Function):
         # opacity = opacity.sigmoid().squeeze(-1) # [2026-01-19 / Hyeongbhin] 
         scale = scale.exp()
         # rotation = F.normalize(rotation, p=2, dim=-1)
-        test_w2c = test_c2w.float().inverse() #.unsqueeze(0) # (V, 4, 4)
+        test_w2c = test_c2w.float().inverse() #.unsqueeze(0) # (C, 4, 4)
         C = test_w2c.shape[0]
         test_intr_i = torch.zeros((C, 3, 3), device=test_w2c.device, dtype=test_w2c.dtype)
-        test_intr_i[:, 0, 0] = test_w2c[:, 0]
-        test_intr_i[:, 1, 1] = test_w2c[:, 1]
-        test_intr_i[:, 0, 2] = test_w2c[:, 2]
-        test_intr_i[:, 1, 2] = test_w2c[:, 3]
-        test_intr_i[:, 2, 2] = 1.0 # (V, 3, 3)
+        test_intr_i[:, 0, 0] = test_intr[:, 0]
+        test_intr_i[:, 1, 1] = test_intr[:, 1]
+        test_intr_i[:, 0, 2] = test_intr[:, 2]
+        test_intr_i[:, 1, 2] = test_intr[:, 3]
+        test_intr_i[:, 2, 2] = 1.0 # (C, 3, 3)
         #t est_intr_i = test_intr_i.unsqueeze(0) # (1, 3, 3)
         
         bg_color = torch.ones((C, 3), device=test_intr.device, dtype=test_intr.dtype)
@@ -59,8 +59,8 @@ class GaussianRenderer(torch.autograd.Function):
                                         sparse_grad=False,                                        
                                         render_mode="RGB",
                                         backgrounds=bg_color,
-                                        rasterize_mode='classic') # (1, H, W, 3) 
-        return rendering # (1, H, W, 3)
+                                        rasterize_mode='classic') # (C, H, W, 3) 
+        return rendering # (C, H, W, 3)
 
     @staticmethod
     def forward(ctx, xyz, feature, scale, rotation, opacity, test_c2ws, test_intr,
@@ -80,8 +80,8 @@ class GaussianRenderer(torch.autograd.Function):
             renderings = torch.zeros(B, V, H, W, 3).to(xyz.device)
             for ib in range(B):
                 for iv in range(0, V, chunk_size):
-                    iv_end = iv+chunk_size if iv+chunk_size < V else V
-                    renderings[ib] = GaussianRenderer.render(xyz[ib], feature[ib], scale[ib], rotation[ib],
+                    iv_end = min(iv + chunk_size, V)
+                    renderings[ib, iv:iv_end] = GaussianRenderer.render(xyz[ib], feature[ib], scale[ib], rotation[ib],
                                                              opacity[ib],  # [2026-01-19 / Hyeongbhin] 
                                                              test_c2ws[ib, iv:iv_end], test_intr[ib, iv:iv_end], W, H, sh_degree, near_plane, far_plane,
                                                              sh_degree_opacity) # [2026-01-19 / Hyeongbhin] 
@@ -108,8 +108,8 @@ class GaussianRenderer(torch.autograd.Function):
         with torch.enable_grad():
             B, V, _ = test_intr.shape
             for ib in range(B):
-                for iv in range(V):
-                    iv_end = iv+chunk_size if iv+chunk_size < V else V
+                for iv in range(0, V, chunk_size):
+                    iv_end = min(iv + chunk_size, V)
                     renderings = GaussianRenderer.render(xyz[ib], feature[ib], scale[ib], rotation[ib], 
                                                         opacity[ib],  # [2026-01-19 / Hyeongbhin] 
                                                         test_c2ws[ib, iv:iv_end], test_intr[ib, iv:iv_end], W, H, sh_degree, near_plane, far_plane, 

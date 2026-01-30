@@ -28,7 +28,7 @@ model:
     max_dist: 500.0
 
 data:
-  data_path: "data/dl3dv_train.txt"
+  data_path: "data/dl3dv_mini.txt"
   json_path: "data/dl3dv_fold_8_kmeans_input_idx.json"
   resize_h: 270
   square_crop: false
@@ -51,7 +51,7 @@ training:
   amp_dtype: bf16
 
   api_key_path: ./configs/api_keys.yaml
-  batch_size_per_gpu: 8
+  batch_size_per_gpu: 1
   warmup: 3000
   weight_decay: 0.05
   beta1: 0.9
