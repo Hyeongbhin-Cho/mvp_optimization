@@ -21,7 +21,9 @@ This project relies on the ecosystem of 3D Gaussian Splatting. Please install `g
 
 ```bash
 # Install gsplat (Check standard installation guide for your specific CUDA version)
-pip install gsplat
+cd gsplat
+
+pip install -e . --no-build-isolation
 ```
 
 ### 2. Install MVP CUDA Extension
