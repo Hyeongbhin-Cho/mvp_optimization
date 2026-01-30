@@ -132,6 +132,8 @@ class MVPModel(nn.Module):
         self.opacity_dim = 1 * (self.config.model.gaussians.opacity_degree + 1) ** 2        
         self._init_tokenizers()
         self.inference_mode = hasattr(config, "inference")
+        GaussianRenderer.CHUNK_SIZE = self.config.get("training", {}).get("chunk_size", 1)
+        
 
         self.stage1 = [
             TransformerBlock(

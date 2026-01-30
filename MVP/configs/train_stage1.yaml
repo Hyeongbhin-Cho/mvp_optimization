@@ -52,6 +52,7 @@ training:
 
   api_key_path: ./configs/api_keys.yaml
   batch_size_per_gpu: 1
+  chunk_size: 32
   warmup: 3000
   weight_decay: 0.05
   beta1: 0.9
@@ -59,7 +60,6 @@ training:
   lr: 0.0002
   train_steps: 10 #100000 
   train_stage: 1
-
   dataset_name: dataset.Dataset
   checkpoint_dir: ./experiments/checkpoints/mvp_stage1
   checkpoint_every: 5000
