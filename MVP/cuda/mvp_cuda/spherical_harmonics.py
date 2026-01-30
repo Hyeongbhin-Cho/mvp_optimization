@@ -60,11 +60,11 @@ class _SphericalHarmonicsOpacity(torch.autograd.Function):
         dirs, coeffs = ctx.saved_tensors
         sh_degree = ctx.sh_degree
         
-        v_coeffs = torch.empty_like(coeffs)
+        v_coeffs = torch.zeros_likes(coeffs)
         compute_v_dirs = ctx.needs_input_grad[1]
         v_dirs = None
         if compute_v_dirs:
-            v_dirs = torch.empty_like(dirs)
+            v_dirs = torch.zeros_likes(dirs)
         
         spherical_harmonics_opacity_bwd(
             sh_degree,

@@ -203,7 +203,7 @@ __device__ void sh_coeffs_to_opacity_vjp(
     // graident of sigmoid
     scalar_t v_sh_sum = v_opacity * (opacity * (1.0f - opacity));
 
-    gpuAtomicAdd(&v_coeffs[0], (scalar_t)(v_sh_sum * 0.2820947917738781f));
+    v_coeffs[0] += (scalar_t)(v_sh_sum * 0.2820947917738781f);
 
     if (degree < 1) return;
 
@@ -213,9 +213,9 @@ __device__ void sh_coeffs_to_opacity_vjp(
     scalar_t v_x = 0.f, v_y = 0.f, v_z = 0.f;
     scalar_t pSH123 = v_sh_sum * 0.48860251190292f;
 
-    gpuAtomicAdd(&v_coeffs[1], (scalar_t)(pSH123 * -y));
-    gpuAtomicAdd(&v_coeffs[2], (scalar_t)(pSH123 * z));
-    gpuAtomicAdd(&v_coeffs[3], (scalar_t)(pSH123 * -x));
+    v_coeffs[1] += (scalar_t)(pSH123 * -y);
+    v_coeffs[2] += (scalar_t)(pSH123 * z);
+    v_coeffs[3] += (scalar_t)(pSH123 * -x);
 
     if (v_dir != nullptr) {
         v_x += -pSH123 * coeffs[3];
@@ -241,11 +241,11 @@ __device__ void sh_coeffs_to_opacity_vjp(
     scalar_t pSH5 = fTmp0B * y;
     scalar_t pSH8 = 0.5462742152960395f * fC1;
     scalar_t pSH4 = 0.5462742152960395f * fS1;
-    gpuAtomicAdd(&v_coeffs[4], (scalar_t)(v_sh_sum * pSH4));
-    gpuAtomicAdd(&v_coeffs[5], (scalar_t)(v_sh_sum * pSH5));
-    gpuAtomicAdd(&v_coeffs[6], (scalar_t)(v_sh_sum * pSH6));
-    gpuAtomicAdd(&v_coeffs[7], (scalar_t)(v_sh_sum * pSH7));
-    gpuAtomicAdd(&v_coeffs[8], (scalar_t)(v_sh_sum * pSH8));
+    v_coeffs[4] += (scalar_t)(v_sh_sum * pSH4);
+    v_coeffs[5] += (scalar_t)(v_sh_sum * pSH5);
+    v_coeffs[6] += (scalar_t)(v_sh_sum * pSH6);
+    v_coeffs[7] += (scalar_t)(v_sh_sum * pSH7);
+    v_coeffs[8] += (scalar_t)(v_sh_sum * pSH8);
 
     scalar_t fTmp0B_z, fC1_x, fC1_y, fS1_x, fS1_y, pSH6_z, pSH7_x, pSH7_z, pSH5_y,
         pSH5_z, pSH8_x, pSH8_y, pSH4_x, pSH4_y;
@@ -296,13 +296,13 @@ __device__ void sh_coeffs_to_opacity_vjp(
     scalar_t pSH10 = fTmp1B * fS1;
     scalar_t pSH15 = -0.5900435899266435f * fC2;
     scalar_t pSH9 = -0.5900435899266435f * fS2;
-    gpuAtomicAdd(&v_coeffs[9], (scalar_t)(v_sh_sum * pSH9));
-    gpuAtomicAdd(&v_coeffs[10], (scalar_t)(v_sh_sum * pSH10));
-    gpuAtomicAdd(&v_coeffs[11], (scalar_t)(v_sh_sum * pSH11));
-    gpuAtomicAdd(&v_coeffs[12], (scalar_t)(v_sh_sum * pSH12));
-    gpuAtomicAdd(&v_coeffs[13], (scalar_t)(v_sh_sum * pSH13));
-    gpuAtomicAdd(&v_coeffs[14], (scalar_t)(v_sh_sum * pSH14));
-    gpuAtomicAdd(&v_coeffs[15], (scalar_t)(v_sh_sum * pSH15));
+    v_coeffs[9] += (scalar_t)(v_sh_sum * pSH9);
+    v_coeffs[10] +=  (scalar_t)(v_sh_sum * pSH10);
+    v_coeffs[11] +=  (scalar_t)(v_sh_sum * pSH11);
+    v_coeffs[12] +=  (scalar_t)(v_sh_sum * pSH12);
+    v_coeffs[13] +=  (scalar_t)(v_sh_sum * pSH13);
+    v_coeffs[14] +=  (scalar_t)(v_sh_sum * pSH14);
+    v_coeffs[15] +=  (scalar_t)(v_sh_sum * pSH15);
 
 
     scalar_t fTmp0C_z, fTmp1B_z, fC2_x, fC2_y, fS2_x, fS2_y, pSH12_z, pSH13_x,
@@ -370,15 +370,15 @@ __device__ void sh_coeffs_to_opacity_vjp(
     scalar_t pSH17 = fTmp2B * fS2;
     scalar_t pSH24 = 0.6258357354491763f * fC3;
     scalar_t pSH16 = 0.6258357354491763f * fS3;
-    gpuAtomicAdd(&v_coeffs[16], (scalar_t)(v_sh_sum * pSH16));
-    gpuAtomicAdd(&v_coeffs[17], (scalar_t)(v_sh_sum * pSH17));
-    gpuAtomicAdd(&v_coeffs[18], (scalar_t)(v_sh_sum * pSH18));
-    gpuAtomicAdd(&v_coeffs[19], (scalar_t)(v_sh_sum * pSH19));
-    gpuAtomicAdd(&v_coeffs[20], (scalar_t)(v_sh_sum * pSH20));
-    gpuAtomicAdd(&v_coeffs[21], (scalar_t)(v_sh_sum * pSH21));
-    gpuAtomicAdd(&v_coeffs[22], (scalar_t)(v_sh_sum * pSH22));
-    gpuAtomicAdd(&v_coeffs[23], (scalar_t)(v_sh_sum * pSH23));
-    gpuAtomicAdd(&v_coeffs[24], (scalar_t)(v_sh_sum * pSH24));
+    v_coeffs[16] += (scalar_t)(v_sh_sum * pSH16);
+    v_coeffs[17] += (scalar_t)(v_sh_sum * pSH17);
+    v_coeffs[18] += (scalar_t)(v_sh_sum * pSH18);
+    v_coeffs[19] += (scalar_t)(v_sh_sum * pSH19);
+    v_coeffs[20] += (scalar_t)(v_sh_sum * pSH20);
+    v_coeffs[21] += (scalar_t)(v_sh_sum * pSH21);
+    v_coeffs[22] += (scalar_t)(v_sh_sum * pSH22);
+    v_coeffs[23] += (scalar_t)(v_sh_sum * pSH23);
+    v_coeffs[24] += (scalar_t)(v_sh_sum * pSH24);
 
     scalar_t fTmp0D_z, fTmp1C_z, fTmp2B_z, fC3_x, fC3_y, fS3_x, fS3_y, pSH20_z,
         pSH21_x, pSH21_z, pSH19_y, pSH19_z, pSH22_x, pSH22_y, pSH22_z, pSH18_x,
@@ -472,7 +472,7 @@ __global__ void spherical_harmonics_opacity_bwd_kernel(
                 dy * inorm, 
                 dz * inorm};
     vec3 v_dir = {0.f, 0.f, 0.f};
-    
+
     sh_coeffs_to_opacity_vjp(
         degrees_to_use,
         dir,
@@ -482,10 +482,17 @@ __global__ void spherical_harmonics_opacity_bwd_kernel(
         v_coeffs + idx * K,
         v_dirs == nullptr ? nullptr : &v_dir
     );
+
     if (v_dirs != nullptr) {
-        gpuAtomicAdd(v_dirs + idx * 3, v_dir.x * inorm);
-        gpuAtomicAdd(v_dirs + idx * 3 + 1, v_dir.y * inorm);
-        gpuAtomicAdd(v_dirs + idx * 3 + 2, v_dir.z * inorm);
+        scalar_t dot = v_dir.x * dir.x + v_dir.y * dir.y + v_dir.z * dir.z;
+
+        scalar_t v_dx = (v_dir_norm.x - dot * dir.x) * inorm;
+        scalar_t v_dy = (v_dir_norm.y - dot * dir.y) * inorm;
+        scalar_t v_dz = (v_dir_norm.z - dot * dir.z) * inorm;
+
+        v_dirs[idx * 3 + 0] = v_dx;
+        v_dirs[idx * 3 + 1] = v_dy;
+        v_dirs[idx * 3 + 2] = v_dz;
     }
 }
 

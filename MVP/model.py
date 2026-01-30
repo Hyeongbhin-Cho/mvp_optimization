@@ -30,7 +30,7 @@ def _init_weights(module):
 
 
 class GaussianRenderer(torch.autograd.Function):
-    CHUNK_SIZE = 4
+    CHUNK_SIZE = 1
     
     @staticmethod
     def render(xyz, feature, scale, rotation, opacity, test_c2w, test_intr, 
@@ -134,7 +134,7 @@ class MVPModel(nn.Module):
         self.inference_mode = hasattr(config, "inference")
         GaussianRenderer.CHUNK_SIZE = self.config.get("training", {}).get("chunk_size", 1)
         
-
+        
         self.stage1 = [
             TransformerBlock(
                 config.model.dim1, False, # bias
