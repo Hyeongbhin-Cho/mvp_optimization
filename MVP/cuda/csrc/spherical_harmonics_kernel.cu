@@ -486,9 +486,9 @@ __global__ void spherical_harmonics_opacity_bwd_kernel(
     if (v_dirs != nullptr) {
         scalar_t dot = v_dir.x * dir.x + v_dir.y * dir.y + v_dir.z * dir.z;
 
-        scalar_t v_dx = (v_dir_norm.x - dot * dir.x) * inorm;
-        scalar_t v_dy = (v_dir_norm.y - dot * dir.y) * inorm;
-        scalar_t v_dz = (v_dir_norm.z - dot * dir.z) * inorm;
+        scalar_t v_dx = (v_dir.x - dot * dir.x) * inorm;
+        scalar_t v_dy = (v_dir.y - dot * dir.y) * inorm;
+        scalar_t v_dz = (v_dir.z - dot * dir.z) * inorm;
 
         v_dirs[idx * 3 + 0] = v_dx;
         v_dirs[idx * 3 + 1] = v_dy;
