@@ -52,7 +52,7 @@ training:
 
   api_key_path: ./configs/api_keys.yaml
   batch_size_per_gpu: 1
-  chunk_size: 32
+  chunk_size: 1
   warmup: 3000
   weight_decay: 0.05
   beta1: 0.9
