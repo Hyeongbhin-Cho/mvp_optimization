@@ -36,15 +36,17 @@ class GaussianRenderer(torch.autograd.Function):
     def render(xyz, feature, scale, rotation, opacity, test_c2w, test_intr, 
                W, H, sh_degree, near_plane, far_plane, sh_degree_opacity):
         batch_dims = xyz.shape[:-2]
-        N = xyz[-2]
+        N = xyz.shape[-2]
         C = test_c2w.shape[-3]
+        K = (sh_degree + 1) ** 2
+        K_opacity = (sh_degree_opacity + 1) ** 2
         
         # dim check
         assert (xyz.shape == batch_dims + (N, 3)), xyz.shape
-        assert (feature.shape == batch_dims + (N, 3)), feature.shape
+        assert (feature.shape == batch_dims + (N, K, 3)), feature.shape
         assert (scale.shape == batch_dims + (N, 3)), scale.shape
         assert (rotation.shape == batch_dims + (N, 4)), rotation.shape
-        assert (opacity.shape == batch_dims + (N, sh_degree_opacity, 1)), opacity.shape
+        assert (opacity.shape == batch_dims + (N, K_opacity, 1)), opacity.shape
         assert (test_c2w.shape == batch_dims + (C, 4, 4)), test_c2w.shape
         assert (test_intr.shape == batch_dims + (C, 4))
         
