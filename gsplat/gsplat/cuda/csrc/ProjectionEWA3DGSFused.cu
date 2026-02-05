@@ -166,12 +166,12 @@ __global__ void projection_ewa_3dgs_fused_fwd_kernel(
     // [2026-01-16 / hyeongbhin] compute opacity by appling SH
     float opacity = 1.0f;
     float extend = 3.33f;
-    float inorm = rsqrtf(mean_c.x * mean_c.x + mean_c.y * mean_c.y + mean_c.z * mean_c.z);
-    vec3 dir = mean_c * inorm;
     if (opacities_in != nullptr) {
         if (sh_degree_opacity < 0) {
             opacity = opacities_in[bid * N + gid];
         } else {
+            vec3 dir = world_direction_from_camera(R, t, glm::make_vec3(means));
+
             int K = (sh_degree_opacity + 1) * (sh_degree_opacity + 1);
             const scalar_t* sh_coeffs = opacities_in + (bid * N * K + gid * K);
             opacity = spherical_harmonics_opacity(sh_degree_opacity, dir, sh_coeffs);
@@ -433,9 +433,10 @@ __global__ void projection_ewa_3dgs_fused_bwd_kernel(
     vec3 v_mean_c(0.f);
 
     // [2026-01-18 / hyeongbhin]
-    float inorm = rsqrtf(mean_c.x * mean_c.x + mean_c.y * mean_c.y + mean_c.z * mean_c.z);
-    vec3 dir = mean_c * inorm;
     vec3 v_dir(0.f);
+    vec3 v_mean(0.f);
+    mat3 v_R(0.f);
+    vec3 v_t(0.f);
 
     if (v_opacities_out != nullptr && opacities_in != nullptr) {
         const float v_opacity = v_opacities_out[idx];
@@ -443,6 +444,9 @@ __global__ void projection_ewa_3dgs_fused_bwd_kernel(
         if (sh_degree_opacity < 0) {
             gpuAtomicAdd(v_opacities_in + (bid * N + gid), (scalar_t)v_opacity);
         } else {
+            vec3 mean = glm::make_vec3(means);
+            vec3 dir = world_direction_from_camera(R, t, glm::make_vec3(means));
+
             int K = (sh_degree_opacity + 1) * (sh_degree_opacity + 1);
             const scalar_t* sh_coeffs = opacities_in + (bid * N * K + gid * K);
             const float opacity = opacities_out[idx];
@@ -453,8 +457,10 @@ __global__ void projection_ewa_3dgs_fused_bwd_kernel(
                                             v_opacity,                // grad outputs
                                             v_sh_coeffs, &v_dir);   // grad inputs
 
-            vec3 v_d = v_dir - glm::dot(v_dir, dir) * dir;
-            v_mean_c += v_d * inorm;
+            world_direction_from_camera_vjp(R, t, glm::make_vec3(means), // fwd inputs
+                                            dir,                         // fwd outputs
+                                            v_dir,                       // grad outputs
+                                            v_R, v_t, v_mean);           // grad inputs
         }
     }
 
@@ -513,10 +519,10 @@ __global__ void projection_ewa_3dgs_fused_bwd_kernel(
     v_mean_c.z += v_depths[0];
 
     // vjp: transform Gaussian covariance to camera space
-    vec3 v_mean(0.f);
+    // vec3 v_mean(0.f);
     mat3 v_covar(0.f);
-    mat3 v_R(0.f);
-    vec3 v_t(0.f);
+    // mat3 v_R(0.f);
+    // vec3 v_t(0.f);
     posW2C_VJP(R, t, glm::make_vec3(means), v_mean_c, v_R, v_t, v_mean);
     covarW2C_VJP(R, covar, v_covar_c, v_R, v_covar);
 

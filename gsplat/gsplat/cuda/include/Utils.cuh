@@ -772,6 +772,40 @@ inline __device__ vec3 safe_normalize_bw(const vec3 &v, const vec3 &d_out) {
     return d_out;
 }
 
+inline __device__ vec3 world_direction_from_camera(
+    const mat3 R,
+    const vec3 t,
+    const vec3 posW // position in world coordinates
+) {
+    vec3 dirW = posW + glm::transpose(R) * t;
+    float inorm = rsqrtf(glm::dot(dirW, dirW)+ 1e-10f);
+    return dirW * inorm;
+}
+
+inline __device__ void world_direction_from_camera_vjp (
+    // fwd inputs
+    const mat3 R,
+    const vec3 t,
+    const vec3 posW, // position in world coordinates
+    // fwd output
+    const vec3 dirW
+    // grad output
+    const vec3 v_dirW, // gradient of the output direction in world coordinates from camera
+    // grad inputs (to be accumulated)
+    mat3 &v_R, // Gradient w.r.t. R
+    vec3 &v_t, // Gradient w.r.t. t
+    vec3 &v_posW // Gradient w.r.t. pW 
+) {
+    vec3 _dirW = posW + glm::transpose(R) * t;
+    float _inorm = rsqrtf(glm::dot(_dirW, _dirW) + 1e-10f);
+
+    vec3 v_unnorm = (v_dirW - glm::dot(v_dirW, dirW) * dirW) * _inorm;
+
+    glm::outerProduct(t, v_unnorm);
+    v_t += R * v_unnorm;
+    v_posW += v_unnorm;
+}
+
 template <typename scalar_t>
 inline __device__ float spherical_harmonics_opacity(
     const int degree, 
