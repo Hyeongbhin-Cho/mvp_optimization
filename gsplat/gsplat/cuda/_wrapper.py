@@ -304,7 +304,7 @@ def fully_fused_projection(
     camera_model: Literal["pinhole", "ortho", "fisheye", "ftheta"] = "pinhole",
     opacities: Optional[Tensor] = None,  # [..., N] or None
     calc_opacities: Optional[bool] = False,
-    sh_degree_opacity: int = -1,
+    sh_degree_opacity: Optional[int] = None,
 ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
     """Projects Gaussians to 2D.
 
@@ -395,6 +395,8 @@ def fully_fused_projection(
         assert batch_dims == (), "sparse_grad does not support batch dimensions"
     if opacities is not None:
         opacities = opacities.contiguous()
+        sh_degree_opacity = -1 if (sh_degree_opacity is None) else sh_degree_opacity
+        
         if sh_degree_opacity < 0:
             assert opacities.shape == batch_dims + (N,), opacities.shape
         else:
