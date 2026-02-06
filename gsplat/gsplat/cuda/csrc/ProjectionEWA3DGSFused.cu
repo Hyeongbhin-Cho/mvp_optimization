@@ -444,7 +444,6 @@ __global__ void projection_ewa_3dgs_fused_bwd_kernel(
         if (sh_degree_opacity < 0) {
             gpuAtomicAdd(v_opacities_in + (bid * N + gid), (scalar_t)v_opacity);
         } else {
-            vec3 mean = glm::make_vec3(means);
             vec3 dir = world_direction_from_camera(R, t, glm::make_vec3(means));
 
             int K = (sh_degree_opacity + 1) * (sh_degree_opacity + 1);
