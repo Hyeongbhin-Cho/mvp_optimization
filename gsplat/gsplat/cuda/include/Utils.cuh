@@ -788,7 +788,7 @@ inline __device__ void world_direction_from_camera_vjp (
     const vec3 t,
     const vec3 posW, // position in world coordinates
     // fwd output
-    const vec3 dirW
+    const vec3 dirW,
     // grad output
     const vec3 v_dirW, // gradient of the output direction in world coordinates from camera
     // grad inputs (to be accumulated)
@@ -801,7 +801,7 @@ inline __device__ void world_direction_from_camera_vjp (
 
     vec3 v_unnorm = (v_dirW - glm::dot(v_dirW, dirW) * dirW) * _inorm;
 
-    glm::outerProduct(t, v_unnorm);
+    v_R += glm::outerProduct(t, v_unnorm);
     v_t += R * v_unnorm;
     v_posW += v_unnorm;
 }
