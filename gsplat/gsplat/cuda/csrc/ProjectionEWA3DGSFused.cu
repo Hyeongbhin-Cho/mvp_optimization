@@ -448,7 +448,7 @@ __global__ void projection_ewa_3dgs_fused_bwd_kernel(
             int K = (sh_degree_opacity + 1) * (sh_degree_opacity + 1);
             const scalar_t* sh_coeffs = opacities_in + (bid * N * K + gid * K);
             // grad outputs
-            const float opacity;
+            float opacity;
             if (opacities_out != nullptr) {
                 opacity = opacities_out[idx];
             } else {
