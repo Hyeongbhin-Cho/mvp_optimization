@@ -171,10 +171,10 @@ __global__ void projection_ewa_3dgs_fused_fwd_kernel(
             opacity = opacities_in[bid * N + gid];
         } else {
             vec3 dir = world_direction_from_camera(R, t, glm::make_vec3(means));
-
             int K = (sh_degree_opacity + 1) * (sh_degree_opacity + 1);
             const scalar_t* sh_coeffs = opacities_in + (bid * N * K + gid * K);
-            opacity = spherical_harmonics_opacity(sh_degree_opacity, dir, sh_coeffs);
+            const float sh_sum = spherical_harmonics(sh_degree_opacity, dir, sh_coeffs);
+            opacity = 1.0f / (1.0f + expf(-sh_sum));
         }
         
         if (compensations != nullptr) {
@@ -433,7 +433,6 @@ __global__ void projection_ewa_3dgs_fused_bwd_kernel(
     vec3 v_mean_c(0.f);
 
     // [2026-01-18 / hyeongbhin]
-    vec3 v_dir(0.f);
     vec3 v_mean(0.f);
     mat3 v_R(0.f);
     vec3 v_t(0.f);
@@ -444,16 +443,26 @@ __global__ void projection_ewa_3dgs_fused_bwd_kernel(
         if (sh_degree_opacity < 0) {
             gpuAtomicAdd(v_opacities_in + (bid * N + gid), (scalar_t)v_opacity);
         } else {
+            // fwd inputs
             vec3 dir = world_direction_from_camera(R, t, glm::make_vec3(means));
-
             int K = (sh_degree_opacity + 1) * (sh_degree_opacity + 1);
             const scalar_t* sh_coeffs = opacities_in + (bid * N * K + gid * K);
-            const float opacity = opacities_out[idx];
+            // grad outputs
+            const float opacity;
+            if (opacities_out != nullptr) {
+                opacity = opacities_out[idx];
+            } else {
+                const float sh_sum = spherical_harmonics(sh_degree_opacity, dir, sh_coeffs);
+                opacity = 1.0f / (1.0f + expf(-sh_sum));
+            }
+            const float v_sh_sum = v_opacity * (opacity * (1.0f - opacity));
+            //grad inputs
             scalar_t* v_sh_coeffs = v_opacities_in + (bid * N * K + gid * K);
-            
-            spherical_harmonics_opacity_vjp(sh_degree_opacity, dir, sh_coeffs, // fwd inputs
-                                            opacity,                  // fwd outputs
-                                            v_opacity,                // grad outputs
+            vec3 v_dir(0.f);
+
+            spherical_harmonics_vjp(sh_degree_opacity, dir, sh_coeffs, // fwd inputs
+                                            // opacity,                  // fwd outputs
+                                            v_sh_sum,                // grad outputs
                                             v_sh_coeffs, &v_dir);   // grad inputs
 
             world_direction_from_camera_vjp(R, t, glm::make_vec3(means), // fwd inputs

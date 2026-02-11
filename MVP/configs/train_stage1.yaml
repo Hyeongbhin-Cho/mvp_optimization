@@ -2,9 +2,9 @@ model:
   class_name: model.MVPModel
 
   patch_factor: 4 # half for stage1 training
-  dim1: 256
-  dim2: 512
-  dim3: 1024
+  dim1: 128 # 256
+  dim2: 256 # 512
+  dim3: 512 # 1024
   num_register_tokens: 4
   head_dim: 64
   inter_multi: 4
@@ -28,7 +28,7 @@ model:
     max_dist: 500.0
 
 data:
-  data_path: "data/dl3dv_mini.txt"
+  data_path: "data/dl3dv_train.txt"
   json_path: "data/dl3dv_fold_8_kmeans_input_idx.json"
   resize_h: 270
   square_crop: false
@@ -36,10 +36,10 @@ data:
   input_frame_select_type: "uniform"
   target_frame_select_type: "random"
   num_input_frames: 32
-  num_target_frames: 12
+  num_target_frames: 4 # 12
   target_has_input: true
   min_frame_dist: 64
-  max_frame_dist: 128
+  max_frame_dist: 96 # 128
   shuffle_input_prob: 0.0
   reverse_input_prob: 0.5
 
@@ -51,14 +51,14 @@ training:
   amp_dtype: bf16
 
   api_key_path: ./configs/api_keys.yaml
-  batch_size_per_gpu: 1
+  batch_size_per_gpu: 4
   chunk_size: 1
   warmup: 3000
   weight_decay: 0.05
   beta1: 0.9
   beta2: 0.95
   lr: 0.0002
-  train_steps: 10 #100000 
+  train_steps: 100000
   train_stage: 1
   dataset_name: dataset.Dataset
   checkpoint_dir: ./experiments/checkpoints/mvp_stage1

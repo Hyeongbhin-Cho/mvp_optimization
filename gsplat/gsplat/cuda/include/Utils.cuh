@@ -807,19 +807,19 @@ inline __device__ void world_direction_from_camera_vjp (
 }
 
 template <typename scalar_t>
-inline __device__ float spherical_harmonics_opacity(
+inline __device__ float spherical_harmonics(
     const int degree, 
     const vec3 &dir, 
     const scalar_t *coeffs
 ) {
-    float sum = 0.2820947917738781f * coeffs[0];
+    float sh_sum = 0.2820947917738781f * coeffs[0];
 
     if (degree >= 1) {
         float x = dir.x;
         float y = dir.y;
         float z = dir.z;
 
-        sum += 0.48860251190292f * (-y * coeffs[1] + z * coeffs[2] - x * coeffs[3]);
+        sh_sum += 0.48860251190292f * (-y * coeffs[1] + z * coeffs[2] - x * coeffs[3]);
 
         if (degree >= 2) {
             float z2 = z * z;
@@ -833,7 +833,7 @@ inline __device__ float spherical_harmonics_opacity(
             float pSH8 = 0.5462742152960395f * fC1;
             float pSH4 = 0.5462742152960395f * fS1;
 
-            sum += pSH4 * coeffs[4] + pSH5 * coeffs[5] +
+            sh_sum += pSH4 * coeffs[4] + pSH5 * coeffs[5] +
                    pSH6 * coeffs[6] + pSH7 * coeffs[7] +
                    pSH8 * coeffs[8];
 
@@ -851,7 +851,7 @@ inline __device__ float spherical_harmonics_opacity(
                 float pSH15 = -0.5900435899266435f * fC2;
                 float pSH9 = -0.5900435899266435f * fS2;
 
-                sum += pSH9 * coeffs[9] + pSH10 * coeffs[10] +
+                sh_sum += pSH9 * coeffs[9] + pSH10 * coeffs[10] +
                        pSH11 * coeffs[11] + pSH12 * coeffs[12] +
                        pSH13 * coeffs[13] + pSH14 * coeffs[14] +
                        pSH15 * coeffs[15];
@@ -875,7 +875,7 @@ inline __device__ float spherical_harmonics_opacity(
                     float pSH24 = 0.6258357354491763f * fC3;
                     float pSH16 = 0.6258357354491763f * fS3;
 
-                    sum += pSH16 * coeffs[16] +
+                    sh_sum += pSH16 * coeffs[16] +
                            pSH17 * coeffs[17] +
                            pSH18 * coeffs[18] +
                            pSH19 * coeffs[19] +
@@ -890,26 +890,23 @@ inline __device__ float spherical_harmonics_opacity(
     }
 
     // sigmoid
-    return 1.0f / (1.0f + expf(-sum));
+    return sh_sum;
 }
 
 template <typename scalar_t>
-inline __device__ void spherical_harmonics_opacity_vjp(
+inline __device__ void spherical_harmonics_vjp(
     // fwd inputs
     const int degree,
     const vec3 &dir, 
     const scalar_t *coeffs, 
     // fwd outputs
-    const float opacity,
+    // const float opacity,
     // grad outputs
-    const float v_opacity,
+    const float v_sh_sum,
     // grad intputs
     scalar_t *v_coeffs,
     vec3 *v_dir
 ) {
-    // graident of sigmoid
-    float v_sh_sum = v_opacity * (opacity * (1.0f - opacity));
-
     gpuAtomicAdd(&v_coeffs[0], (scalar_t)(v_sh_sum * 0.2820947917738781f));
 
     if (degree < 1) return;
