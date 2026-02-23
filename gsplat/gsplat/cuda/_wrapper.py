@@ -179,8 +179,7 @@ def spherical_harmonics(
     return _SphericalHarmonics.apply(
         degrees_to_use, dirs.contiguous(), coeffs.contiguous(), masks
     )
-
-
+    
 def quat_scale_to_covar_preci(
     quats: Tensor,  # [..., 4],
     scales: Tensor,  # [..., 3],

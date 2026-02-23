@@ -4,6 +4,7 @@ import torch
 from torch.utils.data import DataLoader
 from setup import init_config
 from metric_utils import export_results, summarize_evaluation
+from refine import refine_gaussians
 
 config = init_config()
 
@@ -63,7 +64,18 @@ with torch.no_grad(), torch.autocast(
         cnt += 1
         input_data_dict = {key: value[:, :config.data.num_input_frames] if type(value) == torch.Tensor else value for key, value in batch.items()}
         target_data_dict = {key: value[:, config.data.num_input_frames:] if type(value) == torch.Tensor else None for key, value in batch.items()}
-        result = model(input_data_dict, target_data_dict)
+        with torch.no_grad():
+            result = model(input_data_dict, target_data_dict)
+            gaussians = result.gaussians
+            
+        if config.inference.get("do_refine", False):
+            print(f"Refining case {cnt}...")
+            refined_image, refined_params = refine_gaussians(
+                gaussians, target_data_dict, config, 
+                iterations=config.inference.get("refine_iters", 2000)
+            )
+            result.render = refined_image.permute(0, 1, 4, 2, 3)    
+    
         export_results(result, config.inference.out_dir, 
                        compute_metrics=config.inference.get("compute_metrics"), 
                        uid=cnt)

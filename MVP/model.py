@@ -28,7 +28,6 @@ def _init_weights(module):
     elif isinstance(module, nn.Embedding):
         torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-
 class GaussianRenderer(torch.autograd.Function):
     CHUNK_SIZE = 1
     
@@ -133,7 +132,6 @@ class GaussianRenderer(torch.autograd.Function):
                     renderings.backward(grad_output[ib, iv:iv_end])
 
         return xyz.grad, feature.grad, scale.grad, rotation.grad, opacity.grad, None, None, None, None, None, None, None, None
-
 
 class MVPModel(nn.Module):
     def __init__(self, config):
@@ -482,6 +480,7 @@ class MVPModel(nn.Module):
                 target=target_data_dict,
                 loss_metrics=loss_metrics,
                 render=renderings,
+                gaussians=gaussians,
                 )
 
             return result
@@ -516,6 +515,7 @@ class MVPModel(nn.Module):
                 input=input_data_dict,
                 target=target_data_dict,
                 render=renderings,
+                gaussians=gaussians,
                 )
 
             return result

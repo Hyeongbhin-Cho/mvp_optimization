@@ -58,3 +58,5 @@ inference:
   ckpt_path: ./mvp.pt
   out_dir: ./experiments/inference
   compute_metrics: true
+  do_refine: true # hyeongbhin
+  refine_iters: 10 # hyeongbhin

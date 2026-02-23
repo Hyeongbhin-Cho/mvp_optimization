@@ -11,6 +11,25 @@ from gsplat.utils import normalized_quat_to_rotmat
 
 
 @torch.no_grad()
+def compute_common_sh(target_tensor: Tensor):
+    return target_tensor.abs().sum(dim=-1)
+
+@torch.no_grad()
+def compute_back_to_sh_coeffs(target_tensor: Tensor, num_coeffs: int):
+    SH_C0 = 0.28209479177387814 # Y^0_0 base
+    
+    batch_dims = target_tensor.shape[:-1]
+    channel = target_tensor.shape[1]
+    device= target_tensor.device
+    
+    logits = torch.logit(target_tensor)
+    coeffs = torch.zeros(batch_dims + (num_coeffs, channel), device=device)
+    coeffs[:, 0, 0] = logits / SH_C0 
+    
+    return coeffs
+
+
+@torch.no_grad()
 def _multinomial_sample(weights: Tensor, n: int, replacement: bool = True) -> Tensor:
     """Sample from a distribution using torch.multinomial or numpy.random.choice.
 
@@ -157,9 +176,18 @@ def split(
             p_split = (p[sel] + samples).reshape(-1, 3)  # [2N, 3]
         elif name == "scales":
             p_split = torch.log(scales / 1.6).repeat(2, 1)  # [2N, 3]
-        elif name == "opacities" and revised_opacity:
-            new_opacities = 1.0 - torch.sqrt(1.0 - torch.sigmoid(p[sel]))
-            p_split = torch.logit(new_opacities).repeat(repeats)  # [2N]
+        elif name == "opacities":
+            if revised_opacity:
+                current_opa = compute_common_sh(p[sel])
+                current_opa = torch.sigmoid(current_opa)
+                
+                # 1 - sqrt(1 - alpha)
+                new_opa = 1.0 - torch.sqrt(1.0 - current_opa)
+                
+                K = p.shape[1]
+                p_split = compute_back_to_sh_coeffs(new_opa.repeat(2, 1), K)
+            else:
+                p_split = p[sel].repeat(repeats)
         else:
             p_split = p[sel].repeat(repeats)
         p_new = torch.cat([p[rest], p_split])
@@ -240,6 +268,43 @@ def reset_opa(
         param_fn, optimizer_fn, params, optimizers, names=["opacities"]
     )
 
+@torch.no_grad()
+def reset_sh_opa(
+    params: Union[Dict[str, torch.nn.Parameter], torch.nn.ParameterDict],
+    optimizers: Dict[str, torch.optim.Optimizer],
+    state: Dict[str, Tensor],
+    value: float,
+):
+    """Inplace reset the opacities to the given post-sigmoid value.
+
+    Args:
+        params: A dictionary of parameters.
+        optimizers: A dictionary of optimizers, each corresponding to a parameter.
+        value: The value to reset the opacities
+    """
+
+    target_logit = torch.logit(torch.tensor(value, device=params["opacities"].device)).item()
+    SH_C0 = 0.28209479177387814
+    
+    def param_fn(name: str, p: Tensor) -> Tensor:
+        if name == "opacities":
+            new_p = p.clone()
+            
+            new_p[:, 0, :] = torch.clamp(p[:, 0, :], max=target_logit / SH_C0)
+            if new_p.shape[1] > 1:
+                new_p[:, 1:, :] *= 0.1
+                
+            return torch.nn.Parameter(new_p, requires_grad=p.requires_grad)
+        else:
+            raise ValueError(f"Unexpected parameter name: {name}")
+
+    def optimizer_fn(key: str, v: Tensor) -> Tensor:
+        return torch.zeros_like(v)
+
+    # update the parameters and the state in the optimizers
+    _update_param_with_optimizer(
+        param_fn, optimizer_fn, params, optimizers, names=["opacities"]
+    )
 
 @torch.no_grad()
 def relocate(
@@ -257,8 +322,14 @@ def relocate(
         optimizers: A dictionary of optimizers, each corresponding to a parameter.
         mask: A boolean mask to indicates which Gaussians are dead.
     """
-    # support "opacities" with shape [N,] or [N, 1]
-    opacities = torch.sigmoid(params["opacities"])
+    # support "opacities" with shape [N,] , [N, 1], [N, K, 1]
+    # [hyeongbhin]
+    opacities = params["opacities"]
+    if len(opacities.shape) == 3:
+        K = opacities.shape[1]
+        opacities = compute_common_sh(opacities)
+    
+    opacities = torch.sigmoid(opacities)
 
     dead_indices = mask.nonzero(as_tuple=True)[0]
     alive_indices = (~mask).nonzero(as_tuple=True)[0]
@@ -276,6 +347,8 @@ def relocate(
         binoms=binoms,
     )
     new_opacities = torch.clamp(new_opacities, max=1.0 - eps, min=min_opacity)
+    if len(opacities.shape) == 3:
+        new_opacities = compute_back_to_sh_coeffs(new_opacities, K)
 
     def param_fn(name: str, p: Tensor) -> Tensor:
         if name == "opacities":
@@ -306,7 +379,13 @@ def sample_add(
     binoms: Tensor,
     min_opacity: float = 0.005,
 ):
-    opacities = torch.sigmoid(params["opacities"])
+    # [hyeongbhin]
+    opacities = params["opacities"]
+    if len(opacities.shape) == 3:
+        K = opacities.shape[1]
+        opacities = compute_common_sh(opacities)
+    
+    opacities = torch.sigmoid(opacities)
 
     eps = torch.finfo(torch.float32).eps
     probs = opacities.flatten()
@@ -318,6 +397,9 @@ def sample_add(
         binoms=binoms,
     )
     new_opacities = torch.clamp(new_opacities, max=1.0 - eps, min=min_opacity)
+    
+    if len(opacities.shape) == 3:
+        new_opacities = compute_back_to_sh_coeffs(new_opacities, K)
 
     def param_fn(name: str, p: Tensor) -> Tensor:
         if name == "opacities":
@@ -347,7 +429,11 @@ def inject_noise_to_position(
     state: Dict[str, Tensor],
     scaler: float,
 ):
-    opacities = torch.sigmoid(params["opacities"].flatten())
+    opacities = params["opacities"]
+    if len(opacities.shape) == 3:
+        opacities = compute_common_sh(opacities)
+    
+    opacities = torch.sigmoid(opacities.flatten())
     scales = torch.exp(params["scales"])
     covars, _ = quat_scale_to_covar_preci(
         params["quats"],
