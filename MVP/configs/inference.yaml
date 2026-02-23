@@ -60,3 +60,4 @@ inference:
   compute_metrics: true
   do_refine: true # hyeongbhin
   refine_iters: 10 # hyeongbhin
+  num_target_views : 4

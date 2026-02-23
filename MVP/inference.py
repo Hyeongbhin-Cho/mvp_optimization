@@ -68,17 +68,16 @@ with torch.no_grad(), torch.autocast(
             result = model(input_data_dict, target_data_dict)
             gaussians = result.gaussians
             
-        if config.inference.get("do_refine", False):
-            print(f"Refining case {cnt}...")
-            refined_image, refined_params = refine_gaussians(
-                gaussians, target_data_dict, config, 
-                iterations=config.inference.get("refine_iters", 2000)
-            )
-            result.render = refined_image.permute(0, 1, 4, 2, 3)    
+        gaussians_to_save = {k: v.detach().cpu() for k, v in gaussians.items()}
+        save_path = os.path.join("/home/gudqls22/data/gaussians_eval", f"gaussians_{cnt:04d}.pt")
+        torch.save(gaussians_to_save, save_path)
+        
+    print(f"Saved initial gaussians to {save_path}")  
     
         export_results(result, config.inference.out_dir, 
                        compute_metrics=config.inference.get("compute_metrics"), 
                        uid=cnt)
+        
     torch.cuda.empty_cache()
 
 

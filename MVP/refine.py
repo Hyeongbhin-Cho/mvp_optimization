@@ -9,11 +9,11 @@ def refine_gaussians(gaussians, target_data, config, iterations=2000):
     
     # Extract Parameter
     with torch.no_grad():
-        init_xyz = gaussians["xyz"][0].detach().clone()
-        init_feature = gaussians["feature"][0].detach().clone()
-        init_scale = gaussians["scale"][0].detach().clone()
-        init_rotation = gaussians["rotation"][0].detach().clone()
-        init_opacity = gaussians["opacity"][0].detach().clone()
+        init_xyz = gaussians["xyz"][0].detach().clone().requires_grad_(True)
+        init_feature = gaussians["feature"][0].detach().clone().requires_grad_(True)
+        init_scale = gaussians["scale"][0].detach().clone().requires_grad_(True)
+        init_rotation = gaussians["rotation"][0].detach().clone().requires_grad_(True)
+        init_opacity = gaussians["opacity"][0].detach().clone().requires_grad_(True)
 
     # Set ParameterDict
     params = torch.nn.ParameterDict({
@@ -47,37 +47,71 @@ def refine_gaussians(gaussians, target_data, config, iterations=2000):
     test_intr_i[:, 2, 2] = 1.0
     
     target_images = target_data["image"][0].permute(0, 2, 3, 1).contiguous()
+    
+    num_target_views = config.inference.num_target_views
+    with torch.enable_grad():
+        for step in range(iterations):
+            dim_target_views = test_w2c.shape[0]
+            indices = torch.randperm(dim_target_views, device=test_w2c.device)[:num_target_views]
+            
+            active_scales = torch.exp(params["scales"])
+            active_quats = F.normalize(params["quats"], p=2, dim=-1)
+                    
+            render_images, _, info  = rasterization(
+                params["means"], active_quats, active_scales,
+                params["opacities"], params["features"],
+                test_w2c[indices],
+                test_intr_i[indices],
+                w, h,
+                sh_degree=config.model.gaussians.sh_degree,
+                near_plane=config.model.gaussians.near_plane,
+                far_plane=config.model.gaussians.far_plane,
+                sh_degree_opacity=config.model.gaussians.opacity_degree,
+                packed=False,
+                absgrad=False,
+                sparse_grad=False,                                        
+                render_mode="RGB",
+                backgrounds=torch.ones(num_target_views, 3).to(test_intr_i.device),
+                rasterize_mode='classic'
+            )
+            
+            strategy.step_pre_backward(params, optimizers, strategy_state, step, info)
 
-    for step in range(iterations):
-        active_scales = torch.exp(params["scales"])
-        active_quats = F.normalize(params["quats"], p=2, dim=-1)
+            loss = F.l1_loss(render_images, target_images[indices])
+            loss.backward()
+
+            strategy.step_post_backward(params, optimizers, strategy_state, step, info)
+            
+            for opt in optimizers.values():
+                opt.step()
+                opt.zero_grad()
                 
-        render_image, _, info  = rasterization(
-            params["means"], active_quats, active_scales,
-            params["opacities"], params["features"],
-            test_w2c, test_intr_i,
-            w, h,
-            sh_degree=config.model.gaussians.sh_degree,
-            near_plane=config.model.gaussians.near_plane,
-            far_plane=config.model.gaussians.far_plane,
-            sh_degree_opacity=config.model.gaussians.opacity_degree,
-            packed=False,
-            absgrad=False,
-            sparse_grad=False,                                        
-            render_mode="RGB",
-            backgrounds=torch.ones(1, 3).to(test_intr_i.device),
-            rasterize_mode='classic'
-        )
+    with torch.no_grad():
+        final_scales = torch.exp(params["scales"])
+        final_quats = F.normalize(params["quats"], p=2, dim=-1)
         
-        strategy.step_pre_backward(params, optimizers, strategy_state, step, info)
-
-        loss = F.l1_loss(render_image, target_images)
-        loss.backward()
-
-        strategy.step_post_backward(params, optimizers, strategy_state, step, info)
+        final_render_images = []
         
-        for opt in optimizers.values():
-            opt.step()
-            opt.zero_grad()
+        for i in range(0, dim_target_views, num_target_views):
+            end_i = min(i+num_target_views, dim_target_views)
+            
+            render_images, _, _ = rasterization(
+                params["means"], final_quats, final_scales,
+                params["opacities"], params["features"],
+                test_w2c[i: end_i],       
+                test_intr_i[i: end_i],    
+                w, h,
+                sh_degree=config.model.gaussians.sh_degree,
+                near_plane=config.model.gaussians.near_plane,
+                far_plane=config.model.gaussians.far_plane,
+                sh_degree_opacity=config.model.gaussians.opacity_degree,
+                packed=False,
+                backgrounds=torch.ones((end_i - i, 3), device=test_intr_i.device), 
+                rasterize_mode='classic'
+            )
+            
+            final_render_images.append(render_images)
+        
+        final_render_images = torch.concat(final_render_images, dim=0).unsqueeze(0)
 
-    return render_image, params
+    return final_render_images, params
