@@ -12,7 +12,7 @@ from gsplat import rasterization
 def prune_gaussians(gaussians, threshold=0.001):
     raw_opacity = gaussians["opacity"][0]
     
-    base_opacity = torch.sigmoid(raw_opacity[:, 0, 0])
+    base_opacity = torch.sigmoid(raw_opacity.abs().sum(dim=(1, 2)))
     mask = base_opacity > threshold
     
     before_cnt = raw_opacity.shape[0]
@@ -100,12 +100,12 @@ if __name__ == "__main__":
                 test_intr_i[:, 1, 2] = target_intr[:, 3]
                 test_intr_i[:, 2, 2] = 1.0
                 
-                active_scales = torch.exp(pruned_gaussians["scales"])
-                active_quats = F.normalize(pruned_gaussians["quats"], p=2, dim=-1)
+                active_scales = torch.exp(pruned_gaussians["scale"])
+                active_quats = F.normalize(pruned_gaussians["rotation"], p=2, dim=-1)
                 
                 render_image, _, _= rasterization(
-                    pruned_gaussians["means"], active_quats, active_scales,
-                    pruned_gaussians["opacities"], pruned_gaussians["features"],
+                    pruned_gaussians["xyz"][0], active_quats, active_scales[0],
+                    pruned_gaussians["opacity"][0], pruned_gaussians["feature"][0],
                     test_w2c,
                     test_intr_i,
                     w, h,
