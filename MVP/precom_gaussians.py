@@ -14,7 +14,7 @@ def prune_gaussians(gaussians, keep_ratio=0.05):
     base_opacity = raw_opacity[:, 0, 0]
     
     num_gaussians = raw_opacity.shape[0]
-    top_k = num_gaussians * keep_ratio
+    top_k = int(num_gaussians * keep_ratio)
     
     threshold = torch.kthvalue(base_opacity, num_gaussians - top_k + 1).values.item()
     mask = base_opacity >= threshold

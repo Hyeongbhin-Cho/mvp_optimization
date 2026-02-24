@@ -16,11 +16,11 @@ def refine_gaussians(gaussians, intput_data, target_data, config, iterations=200
     
     # Extract Parameter
     with torch.no_grad():
-        init_xyz = gaussians["xyz"][0].detach().clone().requires_grad_(True)
-        init_feature = gaussians["feature"][0].detach().clone().requires_grad_(True)
-        init_scale = gaussians["scale"][0].detach().clone().requires_grad_(True)
-        init_rotation = gaussians["rotation"][0].detach().clone().requires_grad_(True)
-        init_opacity = gaussians["opacity"][0].detach().clone().requires_grad_(True)
+        init_xyz = gaussians["xyz"][0].detach().clone().float().requires_grad_(True)
+        init_feature = gaussians["feature"][0].detach().clone().float().requires_grad_(True)
+        init_scale = gaussians["scale"][0].detach().clone().float().requires_grad_(True)
+        init_rotation = gaussians["rotation"][0].detach().clone().float().requires_grad_(True)
+        init_opacity = gaussians["opacity"][0].detach().clone().float().requires_grad_(True)
 
     # Set ParameterDict
     params = torch.nn.ParameterDict({
@@ -33,7 +33,11 @@ def refine_gaussians(gaussians, intput_data, target_data, config, iterations=200
 
     # Set Optmization
     optimizers = {
-        k: optim.Adam([v], lr=1e-3) for k, v in params.items() if v.requires_grad
+        "means": optim.Adam([params["means"]], lr=1.6e-5), 
+        "features": optim.Adam([params["features"]], lr=2.5e-3),
+        "opacities": optim.Adam([params["opacities"]], lr=1e-3), 
+        "scales": optim.Adam([params["scales"]], lr=1e-3),
+        "quats": optim.Adam([params["quats"]], lr=1e-4),
     }
 
     # Init strategy
@@ -194,13 +198,13 @@ if __name__ == "__main__":
             if not os.path.exists(load_path):
                 continue
             
-            gaussians = torch.load(load_path, map_location="cuda").float()
+            gaussians = torch.load(load_path, map_location="cuda")
                 
             result = refine_gaussians(gaussians,
                                       input_data_dict,
                                       target_data_dict,
                                       config,
-                                      iterations=2000
+                                      iterations=config.inference.refine_iters
             )
         
             export_results(result, config.inference.out_dir, 
