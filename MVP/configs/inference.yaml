@@ -58,7 +58,7 @@ inference:
   ckpt_path: /home/gudqls22/model/mvp.pt
   out_dir: ./experiments/inference
   compute_metrics: true
-  do_refine: true # hyeongbhin
   refine_iters: 10 # hyeongbhin
   num_target_views : 4
   precom_path: /home/gudqls22/data/gaussians_eval
+  prune_threshold: 0.001

@@ -119,7 +119,7 @@ def refine_gaussians(gaussians, intput_data, target_data, config, iterations=200
             
             final_render_images.append(render_images)
         
-        final_render_images = torch.concat(final_render_images, dim=0).unsqueeze(0)
+        final_render_images = torch.concat(final_render_images, dim=0).unsqueeze(0).permute(0, 1, 4, 2, 3)
         
         result = edict(
                 input=input_data_dict,
@@ -194,7 +194,7 @@ if __name__ == "__main__":
             if not os.path.exists(load_path):
                 continue
             
-            gaussians = torch.load(load_path, map_location="cuda")
+            gaussians = torch.load(load_path, map_location="cuda").float()
                 
             result = refine_gaussians(gaussians,
                                       input_data_dict,
