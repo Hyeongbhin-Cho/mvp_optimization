@@ -100,12 +100,18 @@ if __name__ == "__main__":
                 test_intr_i[:, 1, 2] = target_intr[:, 3]
                 test_intr_i[:, 2, 2] = 1.0
                 
-                active_scales = torch.exp(pruned_gaussians["scale"])
-                active_quats = F.normalize(pruned_gaussians["rotation"], p=2, dim=-1)
+                means_cuda = pruned_gaussians["means"][0].to(device).float()
+                quats_cuda = pruned_gaussians["rotation"][0].to(device).float()
+                scales_cuda = pruned_gaussians["scales"][0].to(device).float()
+                opacities_cuda = pruned_gaussians["opacities"][0].to(device).float()
+                features_cuda = pruned_gaussians["features"][0].to(device).float()
+                
+                active_scales = torch.exp(scales_cuda)
+                active_quats = F.normalize(quats_cuda, p=2, dim=-1)
                 
                 render_image, _, _= rasterization(
-                    pruned_gaussians["xyz"][0], active_quats, active_scales[0],
-                    pruned_gaussians["opacity"][0], pruned_gaussians["feature"][0],
+                    means_cuda, active_quats, active_scales,
+                    opacities_cuda, features_cuda,
                     test_w2c,
                     test_intr_i,
                     w, h,
