@@ -61,4 +61,4 @@ inference:
   refine_iters: 10 # hyeongbhin
   num_target_views : 4
   precom_path: /home/gudqls22/data/gaussians_eval
-  prune_threshold: 0.001
+  keep_ratio: 0.20

@@ -9,11 +9,15 @@ import torch.nn.functional as F
 from gsplat import rasterization
 
 @torch.no_grad()
-def prune_gaussians(gaussians, threshold=0.001):
+def prune_gaussians(gaussians, keep_ratio=0.05):
     raw_opacity = gaussians["opacity"][0]
+    base_opacity = raw_opacity[:, 0, 0]
     
-    base_opacity = torch.sigmoid(raw_opacity.abs().sum(dim=(1, 2)))
-    mask = base_opacity > threshold
+    num_gaussians = raw_opacity.shape[0]
+    top_k = num_gaussians * keep_ratio
+    
+    threshold = torch.kthvalue(base_opacity, num_gaussians - top_k + 1).values.item()
+    mask = base_opacity >= threshold
     
     before_cnt = raw_opacity.shape[0]
     after_cnt = mask.sum().item()
@@ -86,7 +90,7 @@ if __name__ == "__main__":
             with torch.no_grad():
                 result = model(input_data_dict, target_data_dict)
                 gaussians = result.gaussians
-                pruned_gaussians = prune_gaussians(gaussians, config.inference.prune_threshold)
+                pruned_gaussians = prune_gaussians(gaussians, config.inference.keep_ratio)
 
                 target_c2w = target_data_dict["c2w"][0]
                 test_w2c = torch.inverse(target_c2w).float()
@@ -103,7 +107,7 @@ if __name__ == "__main__":
                 means_cuda = pruned_gaussians["xyz"][0].to(device).float()
                 quats_cuda = pruned_gaussians["rotation"][0].to(device).float()
                 scales_cuda = pruned_gaussians["scale"][0].to(device).float()
-                opacities_cuda = pruned_gaussians["opacitie"][0].to(device).float()
+                opacities_cuda = pruned_gaussians["opacity"][0].to(device).float()
                 features_cuda = pruned_gaussians["feature"][0].to(device).float()
                 
                 active_scales = torch.exp(scales_cuda)
@@ -114,8 +118,8 @@ if __name__ == "__main__":
                     render, _, _= rasterization(
                         means_cuda, active_quats, active_scales,
                         opacities_cuda, features_cuda,
-                        test_w2c[i],
-                        test_intr_i[i],
+                        test_w2c[i:i+1],
+                        test_intr_i[i:i+1],
                         w, h,
                         sh_degree=config.model.gaussians.sh_degree,
                         near_plane=config.model.gaussians.near_plane,
@@ -125,7 +129,7 @@ if __name__ == "__main__":
                         absgrad=False,
                         sparse_grad=False,                                        
                         render_mode="RGB",
-                        backgrounds=torch.ones(V_target, 3).to(test_intr_i.device),
+                        backgrounds=torch.ones(1, 3).to(test_intr_i.device),
                         rasterize_mode='classic'
                     )
                     render_images.append(render)

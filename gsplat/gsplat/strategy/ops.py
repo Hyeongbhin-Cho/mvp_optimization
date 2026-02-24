@@ -12,7 +12,7 @@ from gsplat.utils import normalized_quat_to_rotmat
 
 @torch.no_grad()
 def compute_common_sh(target_tensor: Tensor):
-    return target_tensor.abs().sum(dim=(1, 2))
+    return target_tensor[:, 0, 0]
 
 @torch.no_grad()
 def compute_back_to_sh_coeffs(target_tensor: Tensor, num_coeffs: int):
