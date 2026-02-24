@@ -100,37 +100,42 @@ if __name__ == "__main__":
                 test_intr_i[:, 1, 2] = target_intr[:, 3]
                 test_intr_i[:, 2, 2] = 1.0
                 
-                means_cuda = pruned_gaussians["means"][0].to(device).float()
+                means_cuda = pruned_gaussians["xyz"][0].to(device).float()
                 quats_cuda = pruned_gaussians["rotation"][0].to(device).float()
-                scales_cuda = pruned_gaussians["scales"][0].to(device).float()
-                opacities_cuda = pruned_gaussians["opacities"][0].to(device).float()
-                features_cuda = pruned_gaussians["features"][0].to(device).float()
+                scales_cuda = pruned_gaussians["scale"][0].to(device).float()
+                opacities_cuda = pruned_gaussians["opacitie"][0].to(device).float()
+                features_cuda = pruned_gaussians["feature"][0].to(device).float()
                 
                 active_scales = torch.exp(scales_cuda)
                 active_quats = F.normalize(quats_cuda, p=2, dim=-1)
                 
-                render_image, _, _= rasterization(
-                    means_cuda, active_quats, active_scales,
-                    opacities_cuda, features_cuda,
-                    test_w2c,
-                    test_intr_i,
-                    w, h,
-                    sh_degree=config.model.gaussians.sh_degree,
-                    near_plane=config.model.gaussians.near_plane,
-                    far_plane=config.model.gaussians.far_plane,
-                    sh_degree_opacity=config.model.gaussians.opacity_degree,
-                    packed=False,
-                    absgrad=False,
-                    sparse_grad=False,                                        
-                    render_mode="RGB",
-                    backgrounds=torch.ones(V_target, 3).to(test_intr_i.device),
-                    rasterize_mode='classic'
-                )
-            
+                render_images=[]
+                for i in range(V_target):
+                    render, _, _= rasterization(
+                        means_cuda, active_quats, active_scales,
+                        opacities_cuda, features_cuda,
+                        test_w2c[i],
+                        test_intr_i[i],
+                        w, h,
+                        sh_degree=config.model.gaussians.sh_degree,
+                        near_plane=config.model.gaussians.near_plane,
+                        far_plane=config.model.gaussians.far_plane,
+                        sh_degree_opacity=config.model.gaussians.opacity_degree,
+                        packed=False,
+                        absgrad=False,
+                        sparse_grad=False,                                        
+                        render_mode="RGB",
+                        backgrounds=torch.ones(V_target, 3).to(test_intr_i.device),
+                        rasterize_mode='classic'
+                    )
+                    render_images.append(render)
+
+                render_images = torch.concat(render_images, dim=0).unsqueeze(0).permute(0, 1, 4, 2, 3)
+                
             save_path = os.path.join("/home/gudqls22/data/gaussians_eval", f"gaussians_{cnt:04d}.pt")
             torch.save(pruned_gaussians, save_path)
             
-            result.render = render_image
+            result.render = render_images
         
             export_results(result, config.inference.out_dir, 
                         compute_metrics=config.inference.get("compute_metrics"), 
