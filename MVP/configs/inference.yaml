@@ -28,7 +28,7 @@ model:
     max_dist: 500.0
 
 data:
-  data_path: "/home/gudqls22/data/dl3dv_mini.txt"
+  data_path: "/home/gudqls22/data/dl3dv_eval.txt"
   json_path: "/home/gudqls22/data/dl3dv_fold_8_kmeans_input_idx.json"
   resize_h: 540
   random_crop: 1.0

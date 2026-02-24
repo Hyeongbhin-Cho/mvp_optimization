@@ -5,6 +5,9 @@ from torch.utils.data import DataLoader
 from setup import init_config
 from metric_utils import export_results, summarize_evaluation
 
+import torch.nn.functional as F
+from gsplat import rasterization
+
 @torch.no_grad()
 def prune_gaussians(gaussians, threshold=0.001):
     raw_opacity = gaussians["opacity"][0]
@@ -79,13 +82,49 @@ if __name__ == "__main__":
             cnt += 1
             input_data_dict = {key: value[:, :config.data.num_input_frames] if type(value) == torch.Tensor else value for key, value in batch.items()}
             target_data_dict = {key: value[:, config.data.num_input_frames:] if type(value) == torch.Tensor else None for key, value in batch.items()}
+            _, _, _, h, w = target_data_dict["image"].size()
             with torch.no_grad():
                 result = model(input_data_dict, target_data_dict)
                 gaussians = result.gaussians
-                gaussians_to_save = prune_gaussians(gaussians, config.inference.prune_threshold)
+                pruned_gaussians = prune_gaussians(gaussians, config.inference.prune_threshold)
+
+                target_c2w = target_data_dict["c2w"][0]
+                test_w2c = torch.inverse(target_c2w).float()
+                
+                target_intr = target_data_dict["fxfycxcy"][0]
+                V_target = target_intr.shape[0]
+                test_intr_i = torch.zeros((V_target, 3, 3), device=test_w2c.device, dtype=test_w2c.dtype)
+                test_intr_i[:, 0, 0] = target_intr[:, 0]
+                test_intr_i[:, 1, 1] = target_intr[:, 1]
+                test_intr_i[:, 0, 2] = target_intr[:, 2]
+                test_intr_i[:, 1, 2] = target_intr[:, 3]
+                test_intr_i[:, 2, 2] = 1.0
+                
+                active_scales = torch.exp(pruned_gaussians["scales"])
+                active_quats = F.normalize(pruned_gaussians["quats"], p=2, dim=-1)
+                
+                render_image, _, _= rasterization(
+                    pruned_gaussians["means"], active_quats, active_scales,
+                    pruned_gaussians["opacities"], pruned_gaussians["features"],
+                    test_w2c,
+                    test_intr_i,
+                    w, h,
+                    sh_degree=config.model.gaussians.sh_degree,
+                    near_plane=config.model.gaussians.near_plane,
+                    far_plane=config.model.gaussians.far_plane,
+                    sh_degree_opacity=config.model.gaussians.opacity_degree,
+                    packed=False,
+                    absgrad=False,
+                    sparse_grad=False,                                        
+                    render_mode="RGB",
+                    backgrounds=torch.ones(V_target, 3).to(test_intr_i.device),
+                    rasterize_mode='classic'
+                )
             
             save_path = os.path.join("/home/gudqls22/data/gaussians_eval", f"gaussians_{cnt:04d}.pt")
-            torch.save(gaussians_to_save, save_path)
+            torch.save(pruned_gaussians, save_path)
+            
+            result.render = render_image
         
             export_results(result, config.inference.out_dir, 
                         compute_metrics=config.inference.get("compute_metrics"), 
