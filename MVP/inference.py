@@ -4,7 +4,6 @@ import torch
 from torch.utils.data import DataLoader
 from setup import init_config
 from metric_utils import export_results, summarize_evaluation
-from refine import refine_gaussians
 
 config = init_config()
 
@@ -66,13 +65,11 @@ with torch.no_grad(), torch.autocast(
         target_data_dict = {key: value[:, config.data.num_input_frames:] if type(value) == torch.Tensor else None for key, value in batch.items()}
         with torch.no_grad():
             result = model(input_data_dict, target_data_dict)
-            gaussians = result.gaussians
+            # gaussians = result.gaussians
             
-        gaussians_to_save = {k: v.detach().cpu() for k, v in gaussians.items()}
-        save_path = os.path.join("/home/gudqls22/data/gaussians_eval", f"gaussians_{cnt:04d}.pt")
-        torch.save(gaussians_to_save, save_path)
-        
-    print(f"Saved initial gaussians to {save_path}")  
+        # gaussians_to_save = {k: v.detach().cpu() for k, v in gaussians.items()}
+        # save_path = os.path.join("/home/gudqls22/data/gaussians_eval", f"gaussians_{cnt:04d}.pt")
+        # torch.save(gaussians_to_save, save_path)
     
         export_results(result, config.inference.out_dir, 
                        compute_metrics=config.inference.get("compute_metrics"), 

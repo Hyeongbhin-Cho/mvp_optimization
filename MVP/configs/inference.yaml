@@ -28,8 +28,8 @@ model:
     max_dist: 500.0
 
 data:
-  data_path: "data/dl3dv_mini.txt"
-  json_path: "data/dl3dv_fold_8_kmeans_input_idx.json"
+  data_path: "/home/gudqls22/data/dl3dv_mini.txt"
+  json_path: "/home/gudqls22/data/dl3dv_fold_8_kmeans_input_idx.json"
   resize_h: 540
   random_crop: 1.0
   square_crop: false
@@ -55,9 +55,10 @@ inference:
   num_workers: 4
   prefetch_factor: 4  
   use_tf32: true
-  ckpt_path: ./mvp.pt
+  ckpt_path: /home/gudqls22/model/mvp.pt
   out_dir: ./experiments/inference
   compute_metrics: true
   do_refine: true # hyeongbhin
   refine_iters: 10 # hyeongbhin
   num_target_views : 4
+  precom_path: /home/gudqls22/data/gaussians_eval
