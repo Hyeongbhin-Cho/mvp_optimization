@@ -12,7 +12,8 @@ from gsplat.utils import normalized_quat_to_rotmat
 
 @torch.no_grad()
 def compute_common_sh(target_tensor: Tensor):
-    return target_tensor[:, 0, 0]
+    SH_C0 = 0.28209479177387814 # Y^0_0 base
+    return target_tensor[:, 0, 0] * SH_C0
 
 @torch.no_grad()
 def compute_back_to_sh_coeffs(target_tensor: Tensor, num_coeffs: int):

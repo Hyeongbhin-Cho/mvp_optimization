@@ -10,8 +10,11 @@ import torch.nn.functional as F
 from gsplat.strategy.default_sh_opacity import SHOpacityStrategy
 from gsplat import rasterization
 import torch.optim as optim
+import time
+from metric_utils import (compute_psnr, compute_lpips, compute_ssim)
+import json
 
-def refine_gaussians(gaussians, intput_data, target_data, config, iterations=2000):
+def refine_gaussians(gaussians, intput_data, target_data, config, iterations=2000, compute_metrics=False, metrics_every=100):
     _, _, _, h, w = target_data["image"].size()
     
     # Extract Parameter
@@ -41,7 +44,7 @@ def refine_gaussians(gaussians, intput_data, target_data, config, iterations=200
     }
 
     # Init strategy
-    strategy = SHOpacityStrategy()
+    strategy = SHOpacityStrategy(reset_every=config.inference.reset_every)
     strategy.check_sanity(params, optimizers)
     strategy_state = strategy.initialize_state()
     
@@ -96,6 +99,19 @@ def refine_gaussians(gaussians, intput_data, target_data, config, iterations=200
             for opt in optimizers.values():
                 opt.step()
                 opt.zero_grad()
+            
+            metrics = []
+            if (step % metrics_every == 0) & compute_metrics:
+                psnr = float(compute_psnr(target_images[indices], render_images).mean())
+                lpips = float(compute_lpips(target_images[indices], render_images).mean())
+                ssim = float(compute_ssim(target_images[indices], render_images).mean())
+                
+                metrics.append({
+                    "step": step,
+                    "psnr": psnr,
+                    "lpips": lpips,
+                    "ssim": ssim
+                })
                 
     with torch.no_grad():
         final_scales = torch.exp(params["scales"])
@@ -130,6 +146,7 @@ def refine_gaussians(gaussians, intput_data, target_data, config, iterations=200
                 target=target_data_dict,
                 render=final_render_images,
                 gaussians=gaussians,
+                metrics=metrics
                 )
 
     return result
@@ -199,13 +216,32 @@ if __name__ == "__main__":
                 continue
             
             gaussians = torch.load(load_path, map_location="cuda")
-                
+            
+            start_time = time.time()
             result = refine_gaussians(gaussians,
                                       input_data_dict,
                                       target_data_dict,
                                       config,
-                                      iterations=config.inference.refine_iters
+                                      iterations=config.inference.refine_iters,
+                                      compute_metrics=config.inference.compute_metrics,
+                                      metrics_every=config.inference.metrics_every                                      
             )
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            print(f"[{cnt:04d}] Scene Overfitting Time: {elapsed_time:.2f} seconds")
+            
+            metrics_dir = os.path.join(config.inference.out_dir, "metrics")
+            os.makedirs(metrics_dir, exist_ok=True)
+            
+            json_path = os.path.join(metrics_dir, f"gaussian_{cnt:04d}.json")
+            
+            save_data = {
+                "overfitting_time_seconds": elapsed_time,
+                "metrics_history": result.metrics 
+            }
+            
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(save_data, f, indent=4)           
         
             export_results(result, config.inference.out_dir, 
                         compute_metrics=config.inference.get("compute_metrics"), 

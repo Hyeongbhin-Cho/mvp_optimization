@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from gsplat import rasterization
 
 @torch.no_grad()
-def prune_gaussians(gaussians, keep_ratio=0.05):
+def prune_gaussians(gaussians, keep_ratio=0.05):    
     raw_opacity = gaussians["opacity"][0]
     base_opacity = raw_opacity[:, 0, 0]
     
@@ -136,7 +136,7 @@ if __name__ == "__main__":
 
                 render_images = torch.concat(render_images, dim=0).unsqueeze(0).permute(0, 1, 4, 2, 3)
                 
-            save_path = os.path.join("/home/gudqls22/data/gaussians_eval", f"gaussians_{cnt:04d}.pt")
+            save_path = os.path.join(config.inference.precom_path, f"gaussians_{cnt:04d}.pt")
             torch.save(pruned_gaussians, save_path)
             
             result.render = render_images
