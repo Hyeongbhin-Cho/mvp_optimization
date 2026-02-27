@@ -14,7 +14,51 @@ import time
 from metric_utils import (compute_psnr, compute_lpips, compute_ssim)
 import json
 
-def refine_gaussians(gaussians, intput_data, target_data, config, iterations=2000, compute_metrics=False, metrics_every=100):
+@torch.no_grad()
+def render_images(gaussians, target_data, config, chunk_size=4):
+    _, _, _, h, w = target_data["image"].size()
+    
+    target_c2w = target_data["c2w"][0]
+    render_w2c = torch.inverse(target_c2w).float()
+    
+    target_intr = target_data["fxfycxcy"][0]
+    V = target_intr.shape[0]
+    render_intr_i = torch.zeros((V, 3, 3), device=render_w2c.device, dtype=render_w2c.dtype)
+    render_intr_i[:, 0, 0] = target_intr[:, 0]
+    render_intr_i[:, 1, 1] = target_intr[:, 1]
+    render_intr_i[:, 0, 2] = target_intr[:, 2]
+    render_intr_i[:, 1, 2] = target_intr[:, 3]
+    render_intr_i[:, 2, 2] = 1.0
+    
+    with torch.no_grad():
+        render_scales = torch.exp(gaussians["scales"])
+        render_quats = F.normalize(gaussians["quats"], p=2, dim=-1)
+        
+        final_render_images = []
+        
+        for i in range(0, V, chunk_size):
+            end_i = min(i+chunk_size, V)
+            
+            render_images, _, _ = rasterization(
+                gaussians["means"], render_quats, render_scales,
+                gaussians["opacities"], gaussians["features"],
+                render_w2c[i: end_i],       
+                render_intr_i[i: end_i],    
+                w, h,
+                sh_degree=config.model.gaussians.sh_degree,
+                near_plane=config.model.gaussians.near_plane,
+                far_plane=config.model.gaussians.far_plane,
+                sh_degree_opacity=config.model.gaussians.opacity_degree,
+                packed=False,
+                backgrounds=torch.ones((end_i - i, 3), device=render_w2c.device), 
+                rasterize_mode='classic'
+            )
+            
+            final_render_images.append(render_images)
+        
+    return torch.concat(final_render_images, dim=0).unsqueeze(0).permute(0, 1, 4, 2, 3)
+
+def refine_gaussians(gaussians, input_data, target_data, config, iterations=2000, compute_metrics=False, metrics_every=100, chunk_size=4):
     _, _, _, h, w = target_data["image"].size()
     
     # Extract Parameter
@@ -48,30 +92,29 @@ def refine_gaussians(gaussians, intput_data, target_data, config, iterations=200
     strategy.check_sanity(params, optimizers)
     strategy_state = strategy.initialize_state()
     
-    target_c2w = target_data["c2w"][0]
-    test_w2c = torch.inverse(target_c2w).float()
+    input_c2w = input_data["c2w"][0]
+    test_w2c = torch.inverse(input_c2w).float()
     
-    target_intr = target_data["fxfycxcy"][0]
-    V_target = target_intr.shape[0]
-    test_intr_i = torch.zeros((V_target, 3, 3), device=test_w2c.device, dtype=test_w2c.dtype)
-    test_intr_i[:, 0, 0] = target_intr[:, 0]
-    test_intr_i[:, 1, 1] = target_intr[:, 1]
-    test_intr_i[:, 0, 2] = target_intr[:, 2]
-    test_intr_i[:, 1, 2] = target_intr[:, 3]
+    input_intr = input_data["fxfycxcy"][0]
+    V_input = input_intr.shape[0]
+    test_intr_i = torch.zeros((V_input, 3, 3), device=test_w2c.device, dtype=test_w2c.dtype)
+    test_intr_i[:, 0, 0] = input_intr[:, 0]
+    test_intr_i[:, 1, 1] = input_intr[:, 1]
+    test_intr_i[:, 0, 2] = input_intr[:, 2]
+    test_intr_i[:, 1, 2] = input_intr[:, 3]
     test_intr_i[:, 2, 2] = 1.0
     
-    target_images = target_data["image"][0].permute(0, 2, 3, 1).contiguous()
+    input_images = input_data["image"][0].permute(0, 2, 3, 1).contiguous()
+    target_images = target_data["image"].contiguous()
     
-    num_target_views = config.inference.num_target_views
     with torch.enable_grad():
         for step in range(iterations):
-            dim_target_views = test_w2c.shape[0]
-            indices = torch.randperm(dim_target_views, device=test_w2c.device)[:num_target_views]
+            indices = torch.randperm(V_input, device=test_w2c.device)[:chunk_size]
             
             active_scales = torch.exp(params["scales"])
             active_quats = F.normalize(params["quats"], p=2, dim=-1)
                     
-            render_images, _, info  = rasterization(
+            input_render_images, _, info  = rasterization(
                 params["means"], active_quats, active_scales,
                 params["opacities"], params["features"],
                 test_w2c[indices],
@@ -85,13 +128,13 @@ def refine_gaussians(gaussians, intput_data, target_data, config, iterations=200
                 absgrad=False,
                 sparse_grad=False,                                        
                 render_mode="RGB",
-                backgrounds=torch.ones(num_target_views, 3).to(test_intr_i.device),
+                backgrounds=torch.ones(chunk_size, 3).to(test_intr_i.device),
                 rasterize_mode='classic'
             )
             
             strategy.step_pre_backward(params, optimizers, strategy_state, step, info)
 
-            loss = F.l1_loss(render_images, target_images[indices])
+            loss = F.l1_loss(input_render_images, input_images[indices])
             loss.backward()
 
             strategy.step_post_backward(params, optimizers, strategy_state, step, info)
@@ -102,9 +145,11 @@ def refine_gaussians(gaussians, intput_data, target_data, config, iterations=200
             
             metrics = []
             if (step % metrics_every == 0) & compute_metrics:
-                psnr = float(compute_psnr(target_images[indices], render_images).mean())
-                lpips = float(compute_lpips(target_images[indices], render_images).mean())
-                ssim = float(compute_ssim(target_images[indices], render_images).mean())
+                target_render_images = render_images(params, target_data, config, chunk_size)
+                
+                psnr = float(compute_psnr(target_images[indices], target_render_images).mean())
+                lpips = float(compute_lpips(target_images[indices], target_render_images).mean())
+                ssim = float(compute_ssim(target_images[indices], target_render_images).mean())
                 
                 metrics.append({
                     "step": step,
@@ -114,37 +159,12 @@ def refine_gaussians(gaussians, intput_data, target_data, config, iterations=200
                 })
                 
     with torch.no_grad():
-        final_scales = torch.exp(params["scales"])
-        final_quats = F.normalize(params["quats"], p=2, dim=-1)
-        
-        final_render_images = []
-        
-        for i in range(0, dim_target_views, num_target_views):
-            end_i = min(i+num_target_views, dim_target_views)
-            
-            render_images, _, _ = rasterization(
-                params["means"], final_quats, final_scales,
-                params["opacities"], params["features"],
-                test_w2c[i: end_i],       
-                test_intr_i[i: end_i],    
-                w, h,
-                sh_degree=config.model.gaussians.sh_degree,
-                near_plane=config.model.gaussians.near_plane,
-                far_plane=config.model.gaussians.far_plane,
-                sh_degree_opacity=config.model.gaussians.opacity_degree,
-                packed=False,
-                backgrounds=torch.ones((end_i - i, 3), device=test_intr_i.device), 
-                rasterize_mode='classic'
-            )
-            
-            final_render_images.append(render_images)
-        
-        final_render_images = torch.concat(final_render_images, dim=0).unsqueeze(0).permute(0, 1, 4, 2, 3)
+        target_render_images = render_images(params, target_data, config, chunk_size)
         
         result = edict(
-                input=input_data_dict,
-                target=target_data_dict,
-                render=final_render_images,
+                input=input_data,
+                target=target_data,
+                render=target_render_images,
                 gaussians=gaussians,
                 metrics=metrics
                 )
@@ -224,7 +244,8 @@ if __name__ == "__main__":
                                       config,
                                       iterations=config.inference.refine_iters,
                                       compute_metrics=config.inference.compute_metrics,
-                                      metrics_every=config.inference.metrics_every                                      
+                                      metrics_every=config.inference.metrics_every,
+                                      chunk_size=config.inference.chunk_size
             )
             end_time = time.time()
             elapsed_time = end_time - start_time

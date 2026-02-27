@@ -60,6 +60,6 @@ inference:
   compute_metrics: true
   refine_iters: 10 # hyeongbhin
   reset_every: 10000
-  num_target_views : 4
+  chunk_size : 4
   precom_path: /home/gudqls22/data/gaussians_eval
   keep_ratio: 0.20
